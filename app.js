@@ -20,7 +20,8 @@ const oneHour = 60 * 60 * 1000;
 const mongodb_host = process.env.MONGODB_HOST;
 const mongodb_user = process.env.MONGODB_USER;
 const mongodb_password = process.env.MONGODB_PASSWORD;
-const mongodb_database = "sessions";
+const mongodb_users_database = process.env.MONGODB_USER_DATABASE;
+const mongodb_sessions_database = process.env.MONGODB_SESSION_DATABASE;
 
 // session
 const session = require("express-session");
@@ -29,40 +30,33 @@ const mongodb_session_secret = process.env.MONGODB_SESSION_SECRET;
 // Creates an instance of MongoClient to manage the connection to the database
 const MongoClient = require("mongodb").MongoClient;
 
-// Rebuilds the connection string (MongoDB URL)
-const atlasURI = `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_database}`;
+// Rebuilds the connection string (MongoDB users database)
+const usersDbURI  = `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_users_database}`;
 
 // Creates an object that can make requests to the database
-let database = new MongoClient(atlasURI, {});
-// TODO include if i do more files than app.js module.exports = {database};
+let database = new MongoClient(usersDbURI , {});
 
-// Gets the users collection from MongoDB
+// Rebuilds the connection string (MongoDB sessions database)
+const sessionsDbURI = `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_sessions_database}`;
 
 // Creates a session storage adapter, enabling Express to save sessions in MongoDB instead of memory
 const MongoStore = require("connect-mongo").default;
-let mongoStore = MongoStore.create({
-  mongoUrl: `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_database}`,
+let sessionStore = MongoStore.create({
+  mongoUrl: sessionsDbURI,
 	crypto: {
 		secret: mongodb_session_secret
 	}
 });
 
-const { MemoryStore } = require("express-session");
-
-// Sets the secret MongoStore pointing to the MongoDB 
-// Sets the expiry time of 1 hour
-
-// Adds the express.urlencoded middleware so app can read POST from database
-// Tells Express to serve the "/public" folder as static files
-
 app.use(session({
   secret: node_session_secret,
-  store: mongoStore,
+  store: sessionStore,
   saveUninitialized: false,
   resave: true
 }));
 
-const userCollection = database.db(mongodb_database).collection("users")
+// Gets the users collection from MongoDB
+const userCollection = database.db(mongodb_users_database).collection("users")
 
 const Joi = require("joi");
 
@@ -131,8 +125,6 @@ app.post("/signup", async (req, res) =>{
   const validationResult = schema.validate({username, email, password});
 
   if (validationResult.error != null){
-    console.log(validationResult.error);
-    
     let errorMessage = `${validationResult.error.message} <br><br>
       <a href="/signup">Try again</a>
     `
@@ -155,11 +147,10 @@ app.post("/signup", async (req, res) =>{
   // Adds the user to the MongoDB users collection
   userCollection.insertOne({username: username, email: email, password: hashedPassword})
 
-  console.log("Correct password");
   req.session.authenticated = true;
   req.session.username = username;
   req.session.cookie.maxAge = oneHour; 
-  res.redirect("members");
+  res.redirect("/members");
 });
 
 // Login Page
@@ -190,7 +181,6 @@ const schema = Joi.object({
 const validationResult = schema.validate({email, password});
 
 if (validationResult.error != null){
-  console.log(validationResult.error);
   res.redirect("/login");
   return;
 }
@@ -205,9 +195,8 @@ if (match.length != 1){
   res.send(errorMessage);
   return;
 }
-console.log("Username:" + match[0].username);
+
 if (await bcrypt.compare(password, match[0].password)){
-  console.log("Correct password");
   req.session.authenticated = true;
   req.session.email = email;
   req.session.username = match[0].username;
