@@ -39,8 +39,6 @@ let database = new MongoClient(usersDbURI , {});
 // Rebuilds the connection string (MongoDB sessions database)
 const sessionsDbURI = `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/${mongodb_sessions_database}`;
 
-console.log("Sessions DB URI:", sessionsDbURI);
-
 // Creates a session storage adapter, enabling Express to save sessions in MongoDB instead of memory
 const MongoStore = require("connect-mongo").default;
 let sessionStore = MongoStore.create({
@@ -48,14 +46,6 @@ let sessionStore = MongoStore.create({
 	crypto: {
 		secret: mongodb_session_secret
 	}
-});
-
-sessionStore.on('connected', () => {
-  console.log('MongoStore connected successfully');
-});
-
-sessionStore.on('error', (err) => {
-  console.error('MongoStore connection error:', err);
 });
 
 app.use(session({
@@ -160,7 +150,7 @@ app.post("/signup", async (req, res) =>{
   req.session.authenticated = true;
   req.session.username = username;
   req.session.cookie.maxAge = oneHour; 
-  // res.redirect("/members");
+
   req.session.save((err) => {
     if (err) console.error("Session save error:", err);
     else console.log("Session saved, ID:", req.session.id);
